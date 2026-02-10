@@ -1,0 +1,707 @@
+<script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+<link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+
+<body style="margin:0;">
+  <div class="min-h-screen flex flex-col items-center w-full"
+       style="
+         background-blend-mode: normal;
+         background-attachment: fixed;
+         padding-top: 40px;">
+
+    <div class="max-w-4xl w-full">
+      <div class="text-center mb-12">
+        <p class="text-xl md:text-2xl text-black font-semibold flex items-center justify-center gap-2">
+          🔍 AI-Powered Discovery
+        </p>
+        <h1 class="text-5xl md:text-6xl font-bold text-black mt-4">
+          Company Explorer
+        </h1>
+        <p class="mt-6 text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-tight">
+          <span class="block mb-2 text-black font-medium"> Ask our AI to find innovative companies. </span>
+          <span class="text-gray-500 text-base md:text-lg">
+            Use natural language to search by <span class="text-indigo-600">sector</span>, <span class="text-indigo-600">location</span> and <span class="text-indigo-600">revenue</span>.
+          </span>
+        </p>
+      </div>
+
+      <div class="w-full bg-white rounded-xl shadow-lg p-8 flex flex-col relative z-40">
+        <%= form_with url: chat_path, method: :post, local: true, data: { turbo: false }, class: "w-full mb-2", id: "chatForm" do |f| %>
+          <div class="relative border border-gray-300 rounded-xl focus-within:ring-2 focus-within:ring-indigo-500 bg-gray-50 p-4">
+            <%= f.text_area :message, value: @message, placeholder: "What would you like to know?", id: "chatInput",
+                class: "w-full bg-transparent border-none p-0 text-gray-700 placeholder-gray-400 outline-none resize-none min-h-[80px] text-lg" %>
+            <div class="absolute bottom-3 right-3">
+              <%= f.submit "Send", class: "bg-indigo-600 text-white px-8 py-2.5 rounded-lg hover:bg-indigo-700 font-bold cursor-pointer transition-colors shadow-md" %>
+            </div>
+          </div>
+        <% end %>
+
+        <div class="flex items-center gap-4 w-full px-0 mb-2 mt-2 relative z-50">
+          <input type="file" id="fileUploadInput" class="hidden">
+
+        <button type="button" onclick="document.getElementById('fileUploadInput').click()" class="text-gray-400 hover:text-indigo-600 transition-colors" title="Attach Document">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.51a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+
+       <button type="button" id="voiceBtn" onclick="startVoiceRecognition()" class="text-gray-400 hover:text-indigo-600 transition-colors" title="Voice Search">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+        </button>
+
+        <div class="relative inline-block ml-2">
+  <button type="button" onclick="toggleSavedSearches()" id="savedSearchesBtn" class="flex items-center gap-2 bg-indigo-50 border-2 border-indigo-500 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,0.8)] active:shadow-none active:translate-x-[1px] active:translate-y-[1px]">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+    Saved History
+  </button>
+
+  <div id="savedSearchesMenu" class="hidden absolute left-0 top-full mt-2 w-80 bg-indigo-50 border-2 border-indigo-500 rounded-xl shadow-[6px_6px_0px_0px_rgba(0,0,0,0.8)] z-[100] overflow-hidden">
+    <div class="p-2 border-b-2 border-indigo-500 bg-white flex justify-between items-center">
+      <span class="text-[10px] font-black uppercase tracking-tight">Recent Activity</span>
+              <button type="button" onclick="clearAllHistory()" class="text-[10px] text-red-600 font-bold hover:underline">Clear all</button>
+            </div>
+            <div id="historyItemsContainer" class="history-scroll-box custom-scrollbar">
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+   <% if @companies.present? %>
+  <div class="flex justify-center mb-4">
+    <button type="button" onclick="initMapbox()" class="flex items-center gap-2 bg-white border border-gray-300 px-4 py-2 rounded-full text-xs font-bold hover:bg-gray-50 transition-all shadow-sm cursor-pointer">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600">
+        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+      </svg>
+      View Results on Map
+    </button>
+  </div>
+
+<div id="mapContainer" style="display: none;" class="w-full max-w-4xl mx-auto mb-8 relative">
+    <div id='map' style="width: 100%; height: 400px;" class="rounded-2xl shadow-lg border-2 border-white"></div>
+    <button onclick="toggleMap()" class="absolute top-4 right-4 bg-white text-black w-8 h-8 rounded-full shadow-lg flex items-center justify-center font-bold hover:bg-gray-100 z-10 cursor-pointer">&times;</button>
+  </div>
+        <div id="quickFilters" class="flex flex-row items-center gap-2 mt-6 overflow-x-auto pb-2 no-scrollbar border-t border-gray-100 pt-6">
+          <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mr-2 whitespace-nowrap">Quick Filters:</span>
+          <select id="cityFilter" onchange="filterCompanies()" class="bg-white border border-gray-200 text-gray-600 text-[11px] rounded-full px-4 py-1.5 outline-none cursor-pointer hover:border-indigo-400 transition-colors">
+            <option value="">City</option>
+            <% @companies.map(&:city).uniq.compact.sort.each do |city| %>
+              <option value="<%= city %>"><%= city %></option>
+            <% end %>
+          </select>
+          <select id="sectorFilter" onchange="filterCompanies()" class="bg-white border border-gray-200 text-gray-600 text-[11px] rounded-full px-4 py-1.5 outline-none cursor-pointer hover:border-indigo-400 transition-colors">
+            <option value="">Sector</option>
+            <% @companies.map(&:sector).uniq.compact.sort.each do |sector| %>
+              <option value="<%= sector %>"><%= sector %></option>
+            <% end %>
+          </select>
+        </div>
+
+        <div id="companiesGrid" class="flex flex-col gap-6 mt-6 items-center w-full pb-10">
+          <% @companies.each_with_index do |company, index| %>
+          <% domain = company.website.present? ? company.website.gsub(%r{\Ahttps?://}, '').split('/').first : nil %>
+            <div class="company-card hover-card relative w-full max-w-3xl bg-white rounded-xl border border-gray-200 shadow-sm p-6 flex flex-row justify-between cursor-pointer"
+                 data-index="<%= index %>"
+                 <% if index >= 10 %>style="display:none"<% end %>
+                 data-city="<%= company.city %>"
+                 data-sector="<%= company.sector %>"
+                 onclick="document.getElementById('modal-<%= company.id %>').showModal()">
+
+              <%= render partial: "companies/company_actions", locals: { company: company, added_list_name: nil } %>
+
+              <div class="flex flex-col gap-3 pr-12 w-2/3">
+                <div class="flex items-center gap-4 mb-2">
+  <% if domain.present? %>
+    <div style="width: 36px; height: 36px; min-width: 36px; max-width: 36px; min-height: 36px; max-height: 36px;"
+         class="flex-none rounded-lg bg-white shadow-sm border border-gray-100 overflow-hidden flex items-center justify-center">
+      <img src="https://www.google.com/s2/favicons?domain=<%= domain %>&sz=128"
+           style="width: 100%; height: 100%; object-fit: contain; display: block; padding: 4px;"
+           onload="if(this.naturalWidth <= 16) this.parentElement.remove();"
+           onerror="this.parentElement.remove()">
+    </div>
+  <% end %>
+  <h2 class="text-xl font-bold text-gray-900 leading-tight truncate"><%= company.company_name %></h2>
+</div>
+                <p class="text-sm text-gray-600 line-clamp-2"><%= company.description %></p>
+                <div class="flex flex-wrap gap-2">
+                  <span class="px-2 py-0.5 text-[11px] bg-indigo-50 text-indigo-700 rounded-full font-medium"><%= company.sector %></span>
+                  <span class="px-2 py-0.5 text-[11px] bg-gray-100 text-gray-600 rounded-full font-medium"><%= company.sub_sector %></span>
+                </div>
+                <div class="flex flex-col gap-1.5 mt-2">
+                  <div class="flex items-center gap-2 text-sm text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400"><path d="M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 1 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    <%= company.city %>
+                  </div>
+                  <div class="flex items-center gap-2 text-sm text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path></svg>
+                    Founded <%= company.founded_year %>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-col justify-center gap-4 pl-6 border-l border-gray-100 w-1/3">
+                <div class="flex items-center gap-2 text-sm text-gray-700">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-indigo-500"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                  <span class="font-medium"><%= company.employees.present? && company.employees > 0 ? company.employees : '<5' %> employees</span>
+                </div>
+                <div class="flex items-center gap-2 text-sm text-gray-700">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-green-500"><polyline points="3 17 9 11 13 15 21 7"></polyline><polyline points="14 7 21 7 21 14"></polyline></svg>
+                  <span class="font-medium"><%= display_revenue(company.revenue) %> revenue</span>
+                </div>
+              </div>
+            </div>
+
+            <dialog id="modal-<%= company.id %>"
+                    style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);"
+                    class="z-[100] m-0 w-[95%] max-w-2xl rounded-2xl border-none p-0 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm overflow-hidden">
+
+              <div class="bg-white p-8 flex flex-col gap-6">
+                <div class="flex justify-between items-start">
+                 <div class="flex flex-col gap-1.5 w-full">
+  <div class="flex items-center gap-3">
+    <% if domain.present? %>
+      <div style="width: 35px; height: 35px; min-width: 35px; max-width: 35px; min-height: 35px; max-height: 35px;"
+           class="flex-none rounded-lg bg-white shadow-sm border border-gray-100 overflow-hidden flex items-center justify-center p-1">
+        <img src="https://www.google.com/s2/favicons?domain=<%= domain %>&sz=128"
+             style="width: 100%; height: 100%; object-fit: contain; display: block;"
+             onload="if(this.naturalWidth <= 16) this.parentElement.remove();"
+             onerror="this.parentElement.remove()">
+      </div>
+    <% end %>
+    <h2 class="text-xl font-bold text-gray-900 leading-tight truncate"><%= company.company_name %></h2>
+    <div class="px-3 py-1 rounded-full font-bold text-[10px] uppercase tracking-wider border shadow-sm"
+         style="background-color: #ecfdf5; color: #065f46; border-color: #d1fae5;">
+      <%= display_revenue(company.revenue) %> REVENUE
+    </div>
+  </div>
+  <p class="text-[11px] text-gray-500 font-medium italic"><%= company.description %></p>
+</div>
+                  <button onclick="document.getElementById('modal-<%= company.id %>').close()" class="text-gray-400 hover:text-gray-600 text-3xl font-light leading-none">&times;</button>
+                </div>
+
+                <div class="flex gap-2 -mt-4">
+                  <span class="px-2 py-0.5 text-[10px] bg-indigo-50 text-indigo-700 rounded-full font-medium"><%= company.sector %></span>
+                  <span class="px-2 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded-full font-medium"><%= company.sub_sector %></span>
+                </div>
+
+                <div>
+                  <h3 class="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-2">Company Details</h3>
+                  <div class="flex gap-3">
+                    <div class="px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl flex-1 flex flex-col justify-center shadow-sm">
+                      <p class="text-[11px] font-bold text-gray-800 leading-tight"><%= company.owner.present? ? company.owner : 'n/a' %></p>
+                      <p class="text-[9px] font-medium text-gray-400 uppercase tracking-tighter">Owner / CEO</p>
+                    </div>
+                    <div class="px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl flex-1 flex flex-col justify-center shadow-sm">
+                      <p class="text-[11px] font-bold text-gray-800 leading-tight"><%= company.employees %></p>
+                      <p class="text-[9px] font-medium text-gray-400 uppercase tracking-tighter">Employees</p>
+                    </div>
+                    <div class="px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl flex-1 flex flex-col justify-center shadow-sm">
+                      <p class="text-[11px] font-bold text-gray-800 leading-tight"><%= company.founded_year %></p>
+                      <p class="text-[9px] font-medium text-gray-400 uppercase tracking-tighter">Founded Year</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex gap-6 pt-4 border-t border-gray-50 items-stretch">
+                  <div class="flex-1 border border-gray-200 rounded-2xl relative overflow-hidden min-h-[160px] bg-gray-100">
+                    <img src="https://img.freepik.com/premium-vector/abstract-navigation-plan-urban-area-generic-city-map-with-signs-streets-roads-house-simple_753943-257.jpg"
+                         class="absolute inset-0 w-full h-full object-cover" alt="City Map">
+                    <div class="absolute inset-0 flex items-center justify-center p-4">
+                      <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 flex flex-col items-center text-center max-w-[85%] relative z-10">
+                        <div class="bg-red-50 p-1.5 rounded-full mb-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ef4444" class="w-5 h-5">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zM12 11.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                          </svg>
+                        </div>
+                        <p class="text-sm font-bold text-gray-900 uppercase tracking-wide"><%= company.city %></p>
+                        <p class="text-[11px] text-gray-600 font-semibold mt-1 leading-tight"><%= company.address rescue "Main St. 123, Central District" %></p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col flex-1 gap-3">
+                    <div class="p-4 border border-gray-300 rounded-xl bg-indigo-50/30 flex-1 flex flex-col justify-center">
+                      <h4 class="text-[9px] font-bold uppercase tracking-widest text-indigo-400 mb-1.5 flex items-center gap-1">
+                        <span class="h-1 w-1 bg-indigo-500 rounded-full"></span> AI Insight
+                      </h4>
+                      <p class="text-[11px] text-gray-700 leading-relaxed font-medium">
+                        <%= company.popup_bio %>
+                      </p>
+                    </div>
+                    <a href="<%= company.website.present? ? (company.website.start_with?('http') ? company.website : "https://#{company.website}") : '#' %>" target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-3 py-2 border border-gray-100 rounded-xl hover:bg-gray-100 transition-all bg-gray-50 group">
+                      <div class="flex flex-col">
+                        <span class="text-gray-600 text-[9px] font-bold truncate tracking-tight"><%= company.website.present? ? company.website.gsub(%r{\Ahttps?://}, '') : 'No website' %></span>
+                        <span class="text-[7px] font-bold text-gray-500 uppercase tracking-tighter">view official website</span>
+                      </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-gray-400 group-hover:text-gray-600 transition-colors"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </dialog>
+          <% end %>
+        </div>
+
+        <% if @companies.size > 10 %>
+          <div id="loadMoreContainer" class="flex flex-col items-center gap-2 mt-2 mb-6">
+            <p id="showingCount" class="text-sm text-gray-500 font-medium">Showing 10 of <%= @companies.size %></p>
+            <button type="button" id="loadMoreBtn" onclick="loadMoreCards()"
+                    class="bg-indigo-600 text-white px-8 py-2.5 rounded-lg hover:bg-indigo-700 font-bold cursor-pointer transition-colors shadow-md">
+              Load More
+            </button>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+</div>
+
+<style>
+  .hover-card {
+    transition: all 0.3s ease-out !important;
+  }
+  .hover-card:hover {
+    transform: translateY(-8px) scale(1.02) !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+    border-color: #6366f1 !important;
+  }
+  .history-scroll-box {
+    max-height: 220px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    display: block !important;
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #fdf5e6;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #000;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #6366f1;
+  }
+</style>
+
+<script>
+
+  let historyData = [];
+  try {
+    const stored = localStorage.getItem('user_chat_history');
+    if (stored) historyData = JSON.parse(stored);
+  } catch (e) {
+    console.error("Historial corrupto, reseteando.");
+    localStorage.removeItem('user_chat_history');
+  }
+
+  function getTimeAgo(dateString) {
+    const now = new Date();
+    const past = new Date(dateString);
+    const diffInMs = now - past;
+    const diffInMins = Math.floor(diffInMs / (1000 * 60));
+    const diffInHrs = Math.floor(diffInMs / (1000 * 60 * 60));
+    if (diffInMins < 1) return 'Just now';
+    if (diffInMins < 60) return `${diffInMins}m ago`;
+    if (diffInHrs < 24) return `${diffInHrs}h ago`;
+    return past.toLocaleDateString();
+  }
+
+
+  function saveSearchToHistory() {
+    const input = document.getElementById('chatInput');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+
+    try {
+
+      let currentHistory = JSON.parse(localStorage.getItem('user_chat_history') || "[]");
+
+      const newSearch = {
+        id: Date.now(),
+        query: text,
+        createdAt: new Date().toISOString(),
+        isFavorite: false
+      };
+
+      currentHistory.unshift(newSearch);
+      if (currentHistory.length > 50) currentHistory.pop();
+
+
+      localStorage.setItem('user_chat_history', JSON.stringify(currentHistory));
+      historyData = currentHistory;
+    } catch (e) {
+      console.error("Error al guardar:", e);
+    }
+  }
+
+  function toggleFavorite(id, event) {
+    if(event) { event.preventDefault(); event.stopPropagation(); }
+    historyData = historyData.map(item => {
+        if (item.id === id) return { ...item, isFavorite: !item.isFavorite };
+        return item;
+    });
+    localStorage.setItem('user_chat_history', JSON.stringify(historyData));
+    renderHistory();
+  }
+
+  function clearAllHistory() {
+    if(confirm("Are you sure you want to clear all history?")) {
+      historyData = [];
+      localStorage.removeItem('user_chat_history');
+      renderHistory();
+    }
+  }
+
+  function renderHistory() {
+    const container = document.getElementById('historyItemsContainer');
+    if (!container) return;
+
+    if (historyData.length === 0) {
+      container.innerHTML = '<div class="p-6 text-center text-gray-400 text-[10px] italic font-bold">No search history yet.</div>';
+      return;
+    }
+
+    const sortedData = [...historyData].sort((a, b) => {
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
+      return b.id - a.id;
+    });
+
+    container.innerHTML = sortedData.map(item => {
+      const displayText = item.query.length > 25 ? item.query.substring(0, 25) + '...' : item.query;
+      const timeDisplay = getTimeAgo(item.createdAt || item.id);
+      const starFill = item.isFavorite ? '#000' : 'none';
+      const safeQuery = item.query.replace(/'/g, "\\'");
+      const rowClass = item.isFavorite ? 'bg-yellow-200/50' : 'hover:bg-[#f5e6d3]';
+
+      return `
+      <div class="p-3 border-b-2 border-black cursor-pointer group flex justify-between items-center transition-colors ${rowClass}">
+        <div class="flex-1 min-w-0 mr-2" onclick="loadSearch('${safeQuery}')">
+          <p class="text-[11px] font-black text-black truncate w-full uppercase tracking-tighter" title="${item.query}">${displayText}</p>
+          <span class="text-[9px] text-gray-500 font-bold block">${timeDisplay}</span>
+        </div>
+        <button onclick="toggleFavorite(${item.id}, event)" class="flex-shrink-0 p-1.5 rounded-lg border-2 border-black bg-white hover:bg-yellow-400 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[1px] active:translate-y-[1px]" type="button">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" stroke="#000" stroke-width="3" fill="${starFill}" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+        </button>
+      </div>`;
+    }).join('');
+  }
+
+  function loadSearch(text) {
+    const input = document.getElementById('chatInput');
+    if(input) input.value = text;
+    document.getElementById('savedSearchesMenu').classList.add('hidden');
+  }
+
+  function toggleSavedSearches() {
+    const menu = document.getElementById('savedSearchesMenu');
+    const btn = document.getElementById('savedSearchesBtn');
+    if(!menu) return;
+    const isHidden = menu.classList.toggle('hidden');
+    if (!isHidden) {
+      renderHistory();
+      setTimeout(() => btn.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    }
+  }
+
+
+  document.addEventListener('DOMContentLoaded', function() {
+    renderHistory();
+
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('savedSearchesMenu');
+      const btn = document.getElementById('savedSearchesBtn');
+      if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) {
+        menu.classList.add('hidden');
+      }
+    });
+
+
+    const chatForm = document.getElementById('chatForm');
+    if (chatForm) {
+      chatForm.addEventListener('submit', function() {
+        saveSearchToHistory();
+      });
+    }
+  });
+
+
+  let visibleBatch = 10;
+
+  function filterCompanies() {
+    const city = document.getElementById('cityFilter').value;
+    const sector = document.getElementById('sectorFilter').value;
+    const hasFilter = city !== "" || sector !== "";
+
+    let visibleCount = 0;
+    let totalMatching = 0;
+
+    document.querySelectorAll('.company-card').forEach(card => {
+      const matchCity = city === "" || card.getAttribute('data-city') === city;
+      const matchSector = sector === "" || card.getAttribute('data-sector') === sector;
+
+      if (!matchCity || !matchSector) {
+        card.style.display = "none";
+      } else {
+        totalMatching++;
+        if (hasFilter) {
+          // When filters are active, show all matching cards
+          card.style.display = "flex";
+          visibleCount++;
+        } else {
+          // No filter — respect the load-more batch
+          const idx = parseInt(card.getAttribute('data-index'));
+          if (idx < visibleBatch) {
+            card.style.display = "flex";
+            visibleCount++;
+          } else {
+            card.style.display = "none";
+          }
+        }
+      }
+    });
+
+    updateLoadMoreUI(visibleCount, totalMatching, hasFilter);
+  }
+
+  function loadMoreCards() {
+    const previousBatch = visibleBatch;
+    visibleBatch += 10;
+    filterCompanies();
+
+    // Scroll to the first newly revealed card
+    const firstNew = document.querySelector(`.company-card[data-index="${previousBatch}"]`);
+    if (firstNew && firstNew.style.display !== "none") {
+      firstNew.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function updateLoadMoreUI(visibleCount, totalMatching, hasFilter) {
+    const container = document.getElementById('loadMoreContainer');
+    if (!container) return;
+
+    const countEl = document.getElementById('showingCount');
+    const btn = document.getElementById('loadMoreBtn');
+
+    if (hasFilter || visibleCount >= totalMatching) {
+      // Hide load-more when filters are active or all cards visible
+      if (hasFilter) {
+        countEl.textContent = `Showing ${totalMatching} of ${totalMatching} (filtered)`;
+      } else {
+        countEl.textContent = `Showing ${visibleCount} of ${totalMatching}`;
+      }
+      btn.style.display = "none";
+    } else {
+      countEl.textContent = `Showing ${visibleCount} of ${totalMatching}`;
+      btn.style.display = "inline-block";
+    }
+  }
+
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll("dialog").forEach(d => d.close()); });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    renderHistory();
+    const results = document.querySelector('button[onclick="initMapbox()"]');
+    if (results) {
+      setTimeout(() => { results.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 300);
+    }
+  });
+
+  // ✅ DROPDOWN: plus button
+  function toggleListDropdown(companyId, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+
+    // close all
+    document.querySelectorAll('[id^="listDropdown-"]').forEach(el => el.classList.add('hidden'));
+
+    // toggle current
+    const menu = document.getElementById(`listDropdown-${companyId}`);
+    if (menu) menu.classList.toggle('hidden');
+  }
+
+  // click outside closes dropdown
+  document.addEventListener('click', () => {
+    document.querySelectorAll('[id^="listDropdown-"]').forEach(el => el.classList.add('hidden'));
+  });
+
+
+mapboxgl.accessToken = 'pk.eyJ1Ijoibmljb2xlbW9saW5hYyIsImEiOiJjbWw4NWF3bTgwM2lwM21zYjk3OXhwOW1rIn0.wH_JbnC_y9-FzOFxwPz-9w';
+let map;
+  let markers = [];
+
+
+  function initMapbox() {
+    const container = document.getElementById('mapContainer');
+
+
+    const isHidden = container.classList.contains('hidden') || container.style.display === 'none';
+
+    if (isHidden) {
+
+      container.classList.remove('hidden');
+      container.style.display = 'block';
+
+
+      if (!map) {
+        map = new mapboxgl.Map({
+          container: 'map',
+          style: 'mapbox://styles/mapbox/streets-v12',
+          center: [-1.5, 52.5],
+          zoom: 5
+        });
+        map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+
+      }
+
+
+      setTimeout(() => {
+        map.resize();
+        renderMarkers();
+      }, 150);
+    } else {
+
+      toggleMap();
+    }
+  }
+
+
+  function toggleMap() {
+    const container = document.getElementById('mapContainer');
+    container.classList.add('hidden');
+    container.style.display = 'none';
+  }
+
+  async function renderMarkers() {
+    if (!map) return;
+
+
+    markers.forEach(m => m.remove());
+    markers = [];
+
+
+    const visibleCards = Array.from(document.querySelectorAll('.company-card'))
+                              .filter(card => card.style.display !== 'none');
+
+    if (visibleCards.length === 0) return;
+
+    const bounds = new mapboxgl.LngLatBounds();
+    let hasValidPoints = false;
+
+
+    const promises = visibleCards.map(async (card) => {
+      const cityName = card.getAttribute('data-city');
+      const companyName = card.querySelector('h2').innerText;
+
+      if (!cityName || cityName.trim() === "") return;
+
+
+      const searchQuery = `${cityName}, United Kingdom`;
+
+      try {
+
+        const response = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${mapboxgl.accessToken}&limit=1&countries=gb`);
+        const data = await response.json();
+
+        if (data.features && data.features.length > 0) {
+          const coords = data.features[0].center;
+
+          const popup = new mapboxgl.Popup({ offset: 25 })
+            .setHTML(`<div style="padding:5px;"><b style="color:#4f46e5;">${companyName}</b><br><small>${cityName}</small></div>`);
+
+          const marker = new mapboxgl.Marker({ color: '#6366f1' })
+            .setLngLat(coords)
+            .setPopup(popup)
+            .addTo(map);
+
+          markers.push(marker);
+          bounds.extend(coords);
+          hasValidPoints = true;
+        }
+      } catch (err) {
+        console.error("Error geocoding:", cityName, err);
+      }
+    });
+
+    await Promise.all(promises);
+
+
+    if (hasValidPoints) {
+      map.fitBounds(bounds, {
+        padding: 50,
+        maxZoom: 10,
+        duration: 1000
+      });
+    }
+  }
+
+
+  let finalTranscript = '';
+  let recognition;
+
+  function startVoiceRecognition() {
+    const btn = document.getElementById('voiceBtn');
+    const input = document.getElementById('chatInput');
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Browser not supported");
+      return;
+    }
+
+
+    if (btn.dataset.recording === "true") {
+      recognition.stop();
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.continuous = true;
+
+    recognition.onstart = () => {
+      btn.dataset.recording = "true";
+      btn.classList.add('text-red-500', 'animate-pulse');
+
+    };
+
+    recognition.onresult = (event) => {
+      let interimTranscript = '';
+
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript + ' ';
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+
+
+      input.value = finalTranscript + interimTranscript;
+
+
+      input.scrollTop = input.scrollHeight;
+    };
+
+    recognition.onend = () => {
+      btn.dataset.recording = "false";
+      btn.classList.remove('text-red-500', 'animate-pulse');
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Error:", event.error);
+      btn.dataset.recording = "false";
+      btn.classList.remove('text-red-500', 'animate-pulse');
+    };
+
+    recognition.start();
+  }
+</script>

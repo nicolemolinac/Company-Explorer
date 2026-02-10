@@ -1,0 +1,74 @@
+<div id="company-actions-<%= company.id %>"
+     class="absolute top-4 right-4 z-20"
+     onclick="event.stopPropagation();">
+
+  <div class="flex items-center gap-2">
+    <% if added_list_name.present? %>
+      <div class="text-[10px] font-bold text-gray-700 whitespace-nowrap">
+        ✓ Already added to <span class="text-indigo-600"><%= added_list_name %></span>
+      </div>
+    <% end %>
+
+    <button type="button"
+          class="h-8 w-8 flex items-center justify-center rounded-full
+                 border border-[#E9D3FF] bg-white text-[#B143FF]
+                 hover:bg-[#FFF4F4] font-bold shadow-sm transition
+                 hover:scale-110"
+          onclick="toggleListDropdown(<%= company.id %>, event)">
+    +
+    </button>
+  </div>
+
+  <div id="listDropdown-<%= company.id %>"
+       class="hidden absolute right-0 mt-3 w-60 rounded-2xl border border-[#E9D3FF] bg-white shadow-xl overflow-y-auto max-h-80">
+
+    <% if user_signed_in? %>
+
+      <% if @lists.present? %>
+        <div class="px-4 py-2 text-xs font-bold uppercase tracking-wide text-black bg-[#FFF4F4] border-b border-[#E9D3FF]">
+          Add to list
+        </div>
+
+        <% @lists.each do |list| %>
+          <%= button_to company_lists_path,
+                method: :post,
+                params: { list_id: list.id, company_id: company.id },
+                form: { class: "m-0", data: { turbo_stream: true } },
+                class: "w-full text-left px-4 py-2.5 text-sm text-black hover:bg-[#FFF4F4] transition cursor-pointer" do %>
+            <%= list.name %>
+          <% end %>
+        <% end %>
+
+      <% else %>
+        <div class="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b pointer-events-none cursor-default">
+          No lists yet
+        </div>
+      <% end %>
+
+      <div class="border-t bg-white px-3 py-2.5">
+        <%= form_with url: lists_path, method: :post, data: { turbo_stream: true }, class: "flex flex-col gap-2" do |f| %>
+          <%= f.hidden_field :company_id, value: company.id %>
+          <%= f.text_field :name,
+              placeholder: "New list name...",
+              required: true,
+              class: "w-full rounded-lg border border-[#E9D3FF] px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#B143FF]/40" %>
+          <button type="submit"
+                  class="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition cursor-pointer">
+            Create
+          </button>
+        <% end %>
+      </div>
+
+    <% else %>
+      <div class="p-3 text-sm text-gray-700">
+        Sign in to save companies.
+
+        <div class="mt-2">
+          <%= link_to "Sign in", login_path,
+                class: "inline-block rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500" %>
+        </div>
+      </div>
+    <% end %>
+
+  </div>
+</div>

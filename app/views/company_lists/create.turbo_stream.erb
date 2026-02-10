@@ -1,0 +1,5 @@
+<%= turbo_stream.replace "company-actions-#{@company_list.company_id}" do %>
+  <%= render partial: "companies/company_actions",
+             locals: { company: Company.find(@company_list.company_id),
+                       added_list_name: @list.name } %>
+<% end %>
